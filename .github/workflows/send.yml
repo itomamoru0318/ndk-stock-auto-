@@ -1,108 +1,29 @@
 
-# ===== 起動確認用（必ず最初に表示される） =====
-print("START SCRIPT", flush=True)
+name: Send NDK Stock CSV
 
-import requests
-import pandas as pd
-from datetime import datetime, date
-import smtplib
-from email.message import EmailMessage
-import holidays
-import os
-import sys
+on:
+  schedule:
+    - cron: '30 23 * * 1-5'
+  workflow_dispatch:
 
-# =========================
-# 祝日チェック（日本）
-# =========================
-jp_holidays = holidays.Japan()
-today_date = date.today()
+jobs:
+  run:
+    runs-on: ubuntu-latest
 
-if today_date in jp_holidays:
-    print(f"祝日({jp_holidays[today_date]})のため処理をスキップします", flush=True)
-    sys.exit(0)
+    steps:
+      - uses: actions/checkout@v4
 
-# =========================
-# 株価取得（TradingView）
-# =========================
-url = "https://scanner.tradingview.com/japan/scan"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-payload = {
-    "symbols": {
-        "tickers": ["TSE:6779"],  # 日本電波工業
-        "query": {"types": []}
-    },
-    "columns": ["open", "high", "low", "close", "volume"]
-}
+      - name: Install dependencies
+        run: |
+          pip install pandas requests holidays
 
-res = requests.post(url, json=payload)
-res.raise_for_status()
-
-data = res.json()["data"][0]["d"]
-open_, high, low, close, volume = data
-
-today_str = datetime.now().strftime("%Y-%m-%d")
-
-# =========================
-# CSV 作成（1日1行）
-# =========================
-df = pd.DataFrame([{
-    "Date": today_str,
-    "Open": open_,
-    "High": high,
-    "Low": low,
-    "Close": close,
-    "Volume": volume
-}])
-
-csv_path = "ndk_stock_latest.csv"
-df.to_csv(csv_path, index=False)
-
-print("CSV作成完了")
-print(df)
-
-# =========================
-# Gmail 設定（GitHub Secrets）
-# =========================
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-
-GMAIL_USER = os.environ["GMAIL_USER"]
-GMAIL_PASS = os.environ["GMAIL_APP_PASSWORD"]
-
-TO_EMAIL = "ito.mamoru@ndk.com"  # Power Automate が監視する宛先
-
-# =========================
-# メール作成
-# =========================
-msg = EmailMessage()
-msg["Subject"] = "NDK_STOCK_CSV_AUTO"
-msg["From"] = GMAIL_USER
-msg["To"] = TO_EMAIL
-
-msg.set_content(
-    f"""NDK 株価CSV 自動送信
-
-日付: {today_str}
-
-このメールには CSV ファイルが添付されています。
-"""
-)
-
-# CSV 添付
-with open(csv_path, "rb") as f:
-    msg.add_attachment(
-        f.read(),
-        maintype="text",
-        subtype="csv",
-        filename="ndk_stock_latest.csv"
-    )
-
-# =========================
-# メール送信
-# =========================
-with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-    server.starttls()
-    server.login(GMAIL_USER, GMAIL_PASS)
-    server.send_message(msg)
-
-print("Gmail送信完了", flush=True)
+      - name: Run script
+        run: python -u send_ndk_stock_csv.py
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
