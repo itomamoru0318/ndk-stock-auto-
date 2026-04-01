@@ -1,0 +1,30 @@
+
+name: Send NDK Stock CSV
+
+on:
+  schedule:
+    # JST 8:30 = UTC 23:30（前日）
+    - cron: '30 23 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas requests holidays
+
+      - name: Run script
+        run: python send_ndk_stock_csv.py
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
